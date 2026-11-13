@@ -51,6 +51,40 @@ func (metadata RenderPersistence) Validate(recordKind string) error {
 	return nil
 }
 
+// IsLegacy reports whether the record predates the current persistence format.
+// Records written before the persistence metadata was introduced decode to an
+// all-zero value; an older explicit version is equally recognizable. Anything
+// that is not strictly older than the current version is never treated as a
+// legacy record.
+func (metadata RenderPersistence) IsLegacy() bool {
+	return metadata.Version >= 0 && metadata.Version < CurrentRenderPersistenceVersion
+}
+
+// ValidateLegacy checks the persistence metadata of a record that predates the
+// current format. Historical records may omit some or all of this metadata, so
+// only internally contradictory values are rejected here. The caller must
+// additionally prove from the record body and the stored files that the record
+// really belongs to the requested render before it may be used.
+func (metadata RenderPersistence) ValidateLegacy(recordKind string) error {
+	if !metadata.IsLegacy() {
+		return E(
+			KindInternal,
+			"unsupported_render_record",
+			"",
+			"render record was written by an unsupported persistence version",
+		)
+	}
+	if metadata.RecordKind != "" && metadata.RecordKind != recordKind {
+		return E(
+			KindInternal,
+			"render_record_kind_mismatch",
+			"",
+			"render record kind does not match its storage location",
+		)
+	}
+	return nil
+}
+
 func (job RenderJob) ValidatePersistence() error {
 	return job.Persistence.Validate(RenderRecordJob)
 }
